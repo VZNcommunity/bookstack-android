@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BookStack Android App - Strings (2026-01-05) -->
+<resources>
+    <string name="app_name">BookStack</string>
+    <string name="library_title">Library</string>
+    <string name="settings_title">Settings</string>
+    <string name="editor_title">Editor</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="server_url">BookStack Server URL</string>
+    <string name="sync_server_url">Sync Server URL</string>
+    <string name="token_id">Token ID</string>
+    <string name="token_secret">Token Secret</string>
+    <string name="configure_server">Configure Server</string>
+    <string name="not_configured">Server not configured</string>
+    <string name="connected">Connected</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="syncing">Syncing…</string>
+</resources>

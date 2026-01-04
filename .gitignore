@@ -1,0 +1,38 @@
+# BookStack Android - Git Ignore (2026-01-05)
+
+# Gradle
+.gradle/
+build/
+*/build/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.DS_Store
+
+# Local configuration
+local.properties
+
+# Keystore
+*.jks
+*.keystore
+
+# Generated files
+*.apk
+*.aab
+*.ap_
+*.dex
+
+# Lint
+lint/intermediates/
+lint/generated/
+lint/outputs/
+lint/tmp/
+
+# Android Studio captures
+captures/
+
+# Kotlin
+*.kotlin_module
