@@ -97,10 +97,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
-    // Fix duplicate class conflict
-    constraints {
-        implementation("com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava")
-    }
+    // Guava (for ListenableFuture required by security-crypto)
+    implementation("androidx.concurrent:concurrent-futures:1.1.0")
+    implementation("com.google.guava:guava:32.1.3-android")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
