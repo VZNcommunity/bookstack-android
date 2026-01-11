@@ -27,6 +27,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.vzith.bookstack.data.api.SearchResult
 import com.vzith.bookstack.data.db.entity.BookEntity
 import com.vzith.bookstack.data.db.entity.PageEntity
+import com.vzith.bookstack.ui.components.SyncStatusBar
 
 /**
  * BookStack Android App - Library Screen (2026-01-05)
@@ -101,87 +102,94 @@ fun LibraryScreen(
             }
         }
     ) { paddingValues ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            when {
-                // Search mode (2026-01-11)
-                uiState.isSearchActive -> {
-                    if (uiState.isSearching) {
+            // Offline indicator at top (2026-01-11)
+            SyncStatusBar()
+
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                when {
+                    // Search mode (2026-01-11)
+                    uiState.isSearchActive -> {
+                        if (uiState.isSearching) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        } else if (uiState.searchResults.isEmpty() && uiState.searchQuery.isNotBlank()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "No results found",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        } else {
+                            SearchResultsList(
+                                results = uiState.searchResults,
+                                onResultClick = { result ->
+                                    if (result.type == "page") {
+                                        onPageClick(result.id)
+                                    }
+                                    // TODO: Handle book/chapter navigation
+                                }
+                            )
+                        }
+                    }
+                    // Loading
+                    uiState.isLoading && uiState.books.isEmpty() -> {
                         CircularProgressIndicator(
                             modifier = Modifier.align(Alignment.Center)
                         )
-                    } else if (uiState.searchResults.isEmpty() && uiState.searchQuery.isNotBlank()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No results found",
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    } else {
-                        SearchResultsList(
-                            results = uiState.searchResults,
-                            onResultClick = { result ->
-                                if (result.type == "page") {
-                                    onPageClick(result.id)
-                                }
-                                // TODO: Handle book/chapter navigation
-                            }
+                    }
+                    // Book detail view
+                    uiState.selectedBook != null -> {
+                        PageList(
+                            pages = uiState.pages,
+                            onPageClick = onPageClick,
+                            onPageLongClick = { viewModel.confirmDeletePage(it) }
+                        )
+                    }
+                    // Book list
+                    else -> {
+                        BookList(
+                            books = uiState.books,
+                            onBookClick = { viewModel.selectBook(it) }
                         )
                     }
                 }
-                // Loading
-                uiState.isLoading && uiState.books.isEmpty() -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.align(Alignment.Center)
-                    )
-                }
-                // Book detail view
-                uiState.selectedBook != null -> {
-                    PageList(
-                        pages = uiState.pages,
-                        onPageClick = onPageClick,
-                        onPageLongClick = { viewModel.confirmDeletePage(it) }
-                    )
-                }
-                // Book list
-                else -> {
-                    BookList(
-                        books = uiState.books,
-                        onBookClick = { viewModel.selectBook(it) }
-                    )
-                }
-            }
 
-            // Error snackbar
-            uiState.error?.let { error ->
-                Snackbar(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(16.dp),
-                    action = {
-                        TextButton(onClick = { viewModel.clearError() }) {
-                            Text("Dismiss")
+                // Error snackbar
+                uiState.error?.let { error ->
+                    Snackbar(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp),
+                        action = {
+                            TextButton(onClick = { viewModel.clearError() }) {
+                                Text("Dismiss")
+                            }
                         }
+                    ) {
+                        Text(error)
                     }
-                ) {
-                    Text(error)
                 }
-            }
 
-            // Loading overlay
-            if (uiState.isLoading && uiState.books.isNotEmpty()) {
-                LinearProgressIndicator(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .align(Alignment.TopCenter)
-                )
+                // Loading overlay
+                if (uiState.isLoading && uiState.books.isNotEmpty()) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .align(Alignment.TopCenter)
+                    )
+                }
             }
         }
     }
