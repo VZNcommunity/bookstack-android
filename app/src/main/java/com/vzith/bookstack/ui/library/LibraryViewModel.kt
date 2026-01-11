@@ -26,7 +26,13 @@ data class LibraryUiState(
     val searchQuery: String = "",
     val searchResults: List<SearchResult> = emptyList(),
     val isSearching: Boolean = false,
-    val isSearchActive: Boolean = false
+    val isSearchActive: Boolean = false,
+    // Create page dialog (2026-01-11)
+    val showCreatePageDialog: Boolean = false,
+    val createPageName: String = "",
+    val isCreatingPage: Boolean = false,
+    // Delete confirmation (2026-01-11)
+    val pageToDelete: PageEntity? = null
 )
 
 class LibraryViewModel : ViewModel() {
@@ -133,6 +139,79 @@ class LibraryViewModel : ViewModel() {
                 searchResults = emptyList(),
                 isSearching = false
             )
+        }
+    }
+
+    // Create page functionality (2026-01-11)
+    fun showCreatePageDialog() {
+        _uiState.update { it.copy(showCreatePageDialog = true, createPageName = "") }
+    }
+
+    fun hideCreatePageDialog() {
+        _uiState.update { it.copy(showCreatePageDialog = false, createPageName = "") }
+    }
+
+    fun onCreatePageNameChange(name: String) {
+        _uiState.update { it.copy(createPageName = name) }
+    }
+
+    fun createPage() {
+        val state = _uiState.value
+        val bookId = state.selectedBook?.id ?: return
+        val name = state.createPageName.trim()
+        if (name.isBlank()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isCreatingPage = true) }
+
+            val result = pageRepository.createPage(
+                bookId = bookId,
+                chapterId = null,
+                name = name,
+                html = "<p></p>"
+            )
+
+            result.onSuccess {
+                _uiState.update {
+                    it.copy(
+                        showCreatePageDialog = false,
+                        createPageName = "",
+                        isCreatingPage = false
+                    )
+                }
+                // Refresh pages list
+                pageRepository.refreshPages(bookId)
+            }.onFailure { e ->
+                _uiState.update {
+                    it.copy(error = e.message, isCreatingPage = false)
+                }
+            }
+        }
+    }
+
+    // Delete page functionality (2026-01-11)
+    fun confirmDeletePage(page: PageEntity) {
+        _uiState.update { it.copy(pageToDelete = page) }
+    }
+
+    fun cancelDeletePage() {
+        _uiState.update { it.copy(pageToDelete = null) }
+    }
+
+    fun deletePage() {
+        val page = _uiState.value.pageToDelete ?: return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, pageToDelete = null) }
+
+            val result = pageRepository.deletePage(page.id)
+            result.onSuccess {
+                // Pages list will auto-update via Flow
+            }.onFailure { e ->
+                _uiState.update { it.copy(error = e.message) }
+            }
+
+            _uiState.update { it.copy(isLoading = false) }
         }
     }
 }

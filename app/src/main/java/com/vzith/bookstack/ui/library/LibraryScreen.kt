@@ -1,13 +1,17 @@
 package com.vzith.bookstack.ui.library
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Refresh
@@ -38,6 +42,17 @@ fun LibraryScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     Scaffold(
+        floatingActionButton = {
+            // FAB for creating new page when viewing a book (2026-01-11)
+            if (uiState.selectedBook != null && !uiState.isSearchActive) {
+                FloatingActionButton(
+                    onClick = { viewModel.showCreatePageDialog() },
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "New Page")
+                }
+            }
+        },
         topBar = {
             if (uiState.isSearchActive) {
                 // Search mode top bar
@@ -131,7 +146,8 @@ fun LibraryScreen(
                 uiState.selectedBook != null -> {
                     PageList(
                         pages = uiState.pages,
-                        onPageClick = onPageClick
+                        onPageClick = onPageClick,
+                        onPageLongClick = { viewModel.confirmDeletePage(it) }
                     )
                 }
                 // Book list
@@ -168,6 +184,26 @@ fun LibraryScreen(
                 )
             }
         }
+    }
+
+    // Create page dialog (2026-01-11)
+    if (uiState.showCreatePageDialog) {
+        CreatePageDialog(
+            pageName = uiState.createPageName,
+            onNameChange = { viewModel.onCreatePageNameChange(it) },
+            onConfirm = { viewModel.createPage() },
+            onDismiss = { viewModel.hideCreatePageDialog() },
+            isCreating = uiState.isCreatingPage
+        )
+    }
+
+    // Delete confirmation dialog (2026-01-11)
+    uiState.pageToDelete?.let { page ->
+        DeletePageDialog(
+            pageName = page.name,
+            onConfirm = { viewModel.deletePage() },
+            onDismiss = { viewModel.cancelDeletePage() }
+        )
     }
 }
 
@@ -250,7 +286,8 @@ private fun BookItem(
 @Composable
 private fun PageList(
     pages: List<PageEntity>,
-    onPageClick: (Int) -> Unit
+    onPageClick: (Int) -> Unit,
+    onPageLongClick: (PageEntity) -> Unit = {}
 ) {
     if (pages.isEmpty()) {
         Box(
@@ -270,21 +307,30 @@ private fun PageList(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(pages) { page ->
-                PageItem(page = page, onClick = { onPageClick(page.id) })
+                PageItem(
+                    page = page,
+                    onClick = { onPageClick(page.id) },
+                    onLongClick = { onPageLongClick(page) }
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun PageItem(
     page: PageEntity,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
@@ -462,4 +508,92 @@ private fun SearchResultItem(
             }
         }
     }
+}
+
+// Create page dialog (2026-01-11)
+@Composable
+private fun CreatePageDialog(
+    pageName: String,
+    onNameChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+    isCreating: Boolean
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("New Page") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = pageName,
+                    onValueChange = onNameChange,
+                    label = { Text("Page name") },
+                    singleLine = true,
+                    enabled = !isCreating,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (isCreating) {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = pageName.isNotBlank() && !isCreating
+            ) {
+                Text("Create")
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isCreating
+            ) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// Delete confirmation dialog (2026-01-11)
+@Composable
+private fun DeletePageDialog(
+    pageName: String,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error
+            )
+        },
+        title = { Text("Delete Page?") },
+        text = {
+            Text("Are you sure you want to delete \"$pageName\"? This action cannot be undone.")
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Delete")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

@@ -2,6 +2,7 @@ package com.vzith.bookstack.data.repository
 
 import com.vzith.bookstack.BookStackApplication
 import com.vzith.bookstack.data.api.BookStackApiClient
+import com.vzith.bookstack.data.api.CreatePageRequest
 import com.vzith.bookstack.data.api.PageUpdateRequest
 import com.vzith.bookstack.data.db.BookStackDatabase
 import com.vzith.bookstack.data.db.entity.PageEntity
@@ -139,6 +140,81 @@ class PageRepository {
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("API error: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Create a new page (2026-01-11)
+     */
+    suspend fun createPage(
+        bookId: Int?,
+        chapterId: Int?,
+        name: String,
+        html: String? = null,
+        markdown: String? = null
+    ): Result<PageEntity> = withContext(Dispatchers.IO) {
+        try {
+            val api = BookStackApiClient.getService()
+                ?: return@withContext Result.failure(Exception("Server not configured"))
+
+            val request = CreatePageRequest(
+                book_id = bookId,
+                chapter_id = chapterId,
+                name = name,
+                html = html,
+                markdown = markdown
+            )
+
+            val response = api.createPage(request)
+            if (response.isSuccessful) {
+                val page = response.body()?.let { p ->
+                    PageEntity(
+                        id = p.id,
+                        bookId = p.book_id,
+                        chapterId = p.chapter_id,
+                        name = p.name,
+                        slug = p.slug,
+                        html = p.html,
+                        markdown = p.markdown,
+                        priority = p.priority,
+                        draft = p.draft,
+                        createdAt = p.created_at,
+                        updatedAt = p.updated_at
+                    )
+                }
+
+                if (page != null) {
+                    pageDao.insertPage(page)
+                    Result.success(page)
+                } else {
+                    Result.failure(Exception("Empty response"))
+                }
+            } else {
+                Result.failure(Exception("Create failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Delete a page (2026-01-11)
+     */
+    suspend fun deletePage(id: Int): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val api = BookStackApiClient.getService()
+                ?: return@withContext Result.failure(Exception("Server not configured"))
+
+            val response = api.deletePage(id)
+            if (response.isSuccessful) {
+                // Remove from local cache
+                pageDao.deletePageById(id)
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Delete failed: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
