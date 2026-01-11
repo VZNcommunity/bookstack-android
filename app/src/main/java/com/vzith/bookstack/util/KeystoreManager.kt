@@ -21,7 +21,11 @@ class KeystoreManager(context: Context) {
         private const val KEY_TOKEN_SECRET = "bookstack_token_secret"
         private const val KEY_SERVER_URL = "bookstack_server_url"
         private const val KEY_SYNC_SERVER_URL = "sync_server_url"
+        private const val KEY_THEME_MODE = "theme_mode"
     }
+
+    // Theme modes: "system", "light", "dark" (2026-01-11)
+    enum class ThemeMode { SYSTEM, LIGHT, DARK }
 
     private val masterKey: MasterKey = MasterKey.Builder(context)
         .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -131,5 +135,26 @@ class KeystoreManager(context: Context) {
      */
     fun clearAll() {
         encryptedPrefs.edit().clear().apply()
+    }
+
+    // Theme Settings (2026-01-11)
+
+    /**
+     * Save theme mode preference
+     */
+    fun saveThemeMode(mode: ThemeMode) {
+        encryptedPrefs.edit().putString(KEY_THEME_MODE, mode.name).apply()
+    }
+
+    /**
+     * Get theme mode preference (defaults to SYSTEM)
+     */
+    fun getThemeMode(): ThemeMode {
+        val saved = encryptedPrefs.getString(KEY_THEME_MODE, null)
+        return try {
+            ThemeMode.valueOf(saved ?: "SYSTEM")
+        } catch (e: IllegalArgumentException) {
+            ThemeMode.SYSTEM
+        }
     }
 }

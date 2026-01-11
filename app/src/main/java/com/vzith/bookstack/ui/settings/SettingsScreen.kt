@@ -2,6 +2,7 @@ package com.vzith.bookstack.ui.settings
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -10,16 +11,22 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.vzith.bookstack.BookStackApplication
+import com.vzith.bookstack.LocalOnThemeModeChange
+import com.vzith.bookstack.LocalThemeMode
 import com.vzith.bookstack.data.api.BookStackApiClient
+import com.vzith.bookstack.util.KeystoreManager
 
 /**
  * BookStack Android App - Settings Screen (2026-01-05)
+ * Updated: 2026-01-11 - Added theme toggle
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,6 +34,10 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val keystoreManager = BookStackApplication.instance.keystoreManager
+
+    // Theme state (2026-01-11)
+    val currentTheme = LocalThemeMode.current
+    val onThemeChange = LocalOnThemeModeChange.current
 
     var serverUrl by remember { mutableStateOf(keystoreManager.getServerUrl() ?: "") }
     var syncServerUrl by remember { mutableStateOf(keystoreManager.getSyncServerUrl() ?: "ws://100.78.187.47:3032") }
@@ -60,6 +71,45 @@ fun SettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Theme Section (2026-01-11)
+            Text(
+                text = "Appearance",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Column {
+                KeystoreManager.ThemeMode.entries.forEach { mode ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .selectable(
+                                selected = currentTheme == mode,
+                                onClick = { onThemeChange(mode) },
+                                role = Role.RadioButton
+                            )
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(
+                            selected = currentTheme == mode,
+                            onClick = null
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = when (mode) {
+                                KeystoreManager.ThemeMode.SYSTEM -> "System default"
+                                KeystoreManager.ThemeMode.LIGHT -> "Light"
+                                KeystoreManager.ThemeMode.DARK -> "Dark"
+                            },
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
             // Server Configuration Section
             Text(
                 text = "Server Configuration",
@@ -87,7 +137,7 @@ fun SettingsScreen(
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
             )
 
-            Divider(modifier = Modifier.padding(vertical = 8.dp))
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
             // API Token Section
             Text(
