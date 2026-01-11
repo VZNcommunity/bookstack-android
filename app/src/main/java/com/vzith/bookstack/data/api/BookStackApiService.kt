@@ -37,6 +37,21 @@ interface BookStackApiService {
         @Path("id") id: Int,
         @Body body: PageUpdateRequest
     ): Response<PageDetailResponse>
+
+    // Search (2026-01-11)
+    @GET("api/search")
+    suspend fun search(
+        @Query("query") query: String,
+        @Query("page") page: Int = 1,
+        @Query("count") count: Int = 20
+    ): Response<SearchResponse>
+
+    // Page CRUD (2026-01-11)
+    @POST("api/pages")
+    suspend fun createPage(@Body body: CreatePageRequest): Response<PageDetailResponse>
+
+    @DELETE("api/pages/{id}")
+    suspend fun deletePage(@Path("id") id: Int): Response<Unit>
 }
 
 // Data classes for API responses
@@ -133,6 +148,37 @@ data class PageDetailResponse(
 
 data class PageUpdateRequest(
     val name: String? = null,
+    val html: String? = null,
+    val markdown: String? = null
+)
+
+// Search API (2026-01-11)
+data class SearchResponse(
+    val data: List<SearchResult>,
+    val total: Int
+)
+
+data class SearchResult(
+    val id: Int,
+    val name: String,
+    val slug: String,
+    val type: String, // "page", "chapter", "book", "bookshelf"
+    val url: String,
+    val preview_html: SearchPreview?,
+    val book_id: Int? = null,
+    val chapter_id: Int? = null
+)
+
+data class SearchPreview(
+    val name: String?,
+    val content: String?
+)
+
+// Page creation (2026-01-11)
+data class CreatePageRequest(
+    val book_id: Int? = null,
+    val chapter_id: Int? = null,
+    val name: String,
     val html: String? = null,
     val markdown: String? = null
 )

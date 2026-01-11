@@ -2,22 +2,31 @@ package com.vzith.bookstack.ui.library
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.vzith.bookstack.data.api.SearchResult
 import com.vzith.bookstack.data.db.entity.BookEntity
 import com.vzith.bookstack.data.db.entity.PageEntity
 import com.vzith.bookstack.data.repository.BookRepository
 import com.vzith.bookstack.data.repository.PageRepository
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
 /**
  * BookStack Android App - Library ViewModel (2026-01-05)
+ * Updated: 2026-01-11 - Added search functionality
  */
 data class LibraryUiState(
     val books: List<BookEntity> = emptyList(),
     val selectedBook: BookEntity? = null,
     val pages: List<PageEntity> = emptyList(),
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    // Search state (2026-01-11)
+    val searchQuery: String = "",
+    val searchResults: List<SearchResult> = emptyList(),
+    val isSearching: Boolean = false,
+    val isSearchActive: Boolean = false
 )
 
 class LibraryViewModel : ViewModel() {
@@ -79,5 +88,51 @@ class LibraryViewModel : ViewModel() {
 
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    // Search functionality (2026-01-11)
+    private var searchJob: Job? = null
+
+    fun onSearchQueryChange(query: String) {
+        _uiState.update { it.copy(searchQuery = query) }
+
+        // Debounce search
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            _uiState.update { it.copy(searchResults = emptyList(), isSearching = false) }
+            return
+        }
+
+        searchJob = viewModelScope.launch {
+            delay(300) // 300ms debounce
+            performSearch(query)
+        }
+    }
+
+    private suspend fun performSearch(query: String) {
+        _uiState.update { it.copy(isSearching = true) }
+
+        val result = bookRepository.search(query)
+        result.onSuccess { results ->
+            _uiState.update { it.copy(searchResults = results, isSearching = false) }
+        }.onFailure { e ->
+            _uiState.update { it.copy(error = e.message, isSearching = false) }
+        }
+    }
+
+    fun activateSearch() {
+        _uiState.update { it.copy(isSearchActive = true) }
+    }
+
+    fun deactivateSearch() {
+        searchJob?.cancel()
+        _uiState.update {
+            it.copy(
+                isSearchActive = false,
+                searchQuery = "",
+                searchResults = emptyList(),
+                isSearching = false
+            )
+        }
     }
 }

@@ -58,4 +58,24 @@ class BookRepository {
      * Get single book
      */
     suspend fun getBook(id: Int): BookEntity? = bookDao.getBook(id)
+
+    /**
+     * Search across all content (2026-01-11)
+     */
+    suspend fun search(query: String): Result<List<com.vzith.bookstack.data.api.SearchResult>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val api = BookStackApiClient.getService()
+                    ?: return@withContext Result.failure(Exception("Server not configured"))
+
+                val response = api.search(query)
+                if (response.isSuccessful) {
+                    Result.success(response.body()?.data ?: emptyList())
+                } else {
+                    Result.failure(Exception("Search failed: ${response.code()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
 }
