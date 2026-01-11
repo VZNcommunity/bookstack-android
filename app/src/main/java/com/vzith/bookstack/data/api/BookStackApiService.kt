@@ -11,9 +11,12 @@ import retrofit2.http.*
  */
 interface BookStackApiService {
 
-    // Books
+    // Books (2026-01-11: Added pagination support)
     @GET("api/books")
-    suspend fun getBooks(): Response<BookListResponse>
+    suspend fun getBooks(
+        @Query("offset") offset: Int = 0,
+        @Query("count") count: Int = 100
+    ): Response<BookListResponse>
 
     @GET("api/books/{id}")
     suspend fun getBook(@Path("id") id: Int): Response<BookDetailResponse>

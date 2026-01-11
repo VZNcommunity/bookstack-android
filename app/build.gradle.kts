@@ -24,7 +24,9 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Enable R8 minification for smaller APK and better performance (2026-01-11)
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -97,6 +99,9 @@ dependencies {
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // Coil - Image loading with caching (2026-01-11)
+    implementation("io.coil-kt:coil-compose:2.5.0")
 
     // Guava (for ListenableFuture required by security-crypto)
     implementation("androidx.concurrent:concurrent-futures:1.1.0")
