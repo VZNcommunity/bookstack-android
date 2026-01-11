@@ -47,6 +47,8 @@ fun EditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     var showMoreMenu by remember { mutableStateOf(false) }
+    var showLinkDialog by remember { mutableStateOf(false) }
+    var showImageDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(pageId) {
         viewModel.loadPage(pageId)
@@ -156,9 +158,11 @@ fun EditorScreen(
                     CircularProgressIndicator()
                 }
             } else {
-                // Formatting Toolbar
+                // Formatting Toolbar (2026-01-11: Enhanced)
                 EditorToolbar(
                     richTextState = viewModel.richTextState,
+                    onInsertLink = { showLinkDialog = true },
+                    onInsertImage = { showImageDialog = true },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -255,11 +259,38 @@ fun EditorScreen(
             CircularProgressIndicator()
         }
     }
+
+    // Link Dialog (2026-01-11)
+    if (showLinkDialog) {
+        InsertLinkDialog(
+            onInsert = { url, text ->
+                viewModel.richTextState.addLink(text = text, url = url)
+                showLinkDialog = false
+            },
+            onDismiss = { showLinkDialog = false }
+        )
+    }
+
+    // Image Dialog (2026-01-11)
+    if (showImageDialog) {
+        InsertImageDialog(
+            onInsert = { url, alt ->
+                // Insert image as HTML img tag
+                val currentHtml = viewModel.richTextState.toHtml()
+                val imgTag = "<img src=\"$url\" alt=\"$alt\" />"
+                viewModel.richTextState.setHtml(currentHtml + imgTag)
+                showImageDialog = false
+            },
+            onDismiss = { showImageDialog = false }
+        )
+    }
 }
 
 @Composable
 private fun EditorToolbar(
     richTextState: com.mohamedrejeb.richeditor.model.RichTextState,
+    onInsertLink: () -> Unit = {},
+    onInsertImage: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -269,6 +300,35 @@ private fun EditorToolbar(
             .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
+        // Undo/Redo (2026-01-11)
+        IconButton(
+            onClick = { /* richTextState.undo() - if supported */ },
+            enabled = false // RichTextEditor may not support undo yet
+        ) {
+            Icon(
+                Icons.Default.Undo,
+                contentDescription = "Undo",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+
+        IconButton(
+            onClick = { /* richTextState.redo() - if supported */ },
+            enabled = false
+        ) {
+            Icon(
+                Icons.Default.Redo,
+                contentDescription = "Redo",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+        }
+
+        VerticalDivider(
+            modifier = Modifier
+                .height(24.dp)
+                .align(Alignment.CenterVertically)
+        )
+
         // Bold
         IconButton(
             onClick = { richTextState.toggleSpanStyle(SpanStyle(fontWeight = FontWeight.Bold)) }
@@ -311,10 +371,9 @@ private fun EditorToolbar(
             )
         }
 
-        Divider(
+        VerticalDivider(
             modifier = Modifier
                 .height(24.dp)
-                .width(1.dp)
                 .align(Alignment.CenterVertically)
         )
 
@@ -357,10 +416,9 @@ private fun EditorToolbar(
             )
         }
 
-        Divider(
+        VerticalDivider(
             modifier = Modifier
                 .height(24.dp)
-                .width(1.dp)
                 .align(Alignment.CenterVertically)
         )
 
@@ -389,6 +447,72 @@ private fun EditorToolbar(
                     MaterialTheme.colorScheme.primary
                 else
                     MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        VerticalDivider(
+            modifier = Modifier
+                .height(24.dp)
+                .align(Alignment.CenterVertically)
+        )
+
+        // Code (2026-01-11)
+        IconButton(
+            onClick = { richTextState.toggleCodeSpan() }
+        ) {
+            Icon(
+                Icons.Default.Code,
+                contentDescription = "Code",
+                tint = if (richTextState.isCodeSpan)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Quote (2026-01-11)
+        IconButton(
+            onClick = { /* Quote not directly supported, use paragraph style */ }
+        ) {
+            Icon(
+                Icons.Default.FormatQuote,
+                contentDescription = "Quote",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        VerticalDivider(
+            modifier = Modifier
+                .height(24.dp)
+                .align(Alignment.CenterVertically)
+        )
+
+        // Link (2026-01-11)
+        IconButton(onClick = onInsertLink) {
+            Icon(
+                Icons.Default.Link,
+                contentDescription = "Insert Link",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Image (2026-01-11)
+        IconButton(onClick = onInsertImage) {
+            Icon(
+                Icons.Default.Image,
+                contentDescription = "Insert Image",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        // Horizontal Rule (2026-01-11)
+        IconButton(
+            onClick = { /* Add horizontal rule */ }
+        ) {
+            Icon(
+                Icons.Default.HorizontalRule,
+                contentDescription = "Horizontal Rule",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -568,6 +692,110 @@ private fun ExportDialog(
             }
         },
         confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// Insert Link Dialog (2026-01-11)
+@Composable
+private fun InsertLinkDialog(
+    onInsert: (url: String, text: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var url by remember { mutableStateOf("") }
+    var text by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Insert Link") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    label = { Text("Link Text") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("URL") },
+                    placeholder = { Text("https://") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onInsert(url, text.ifBlank { url }) },
+                enabled = url.isNotBlank()
+            ) {
+                Text("Insert")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+// Insert Image Dialog (2026-01-11)
+@Composable
+private fun InsertImageDialog(
+    onInsert: (url: String, altText: String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var url by remember { mutableStateOf("") }
+    var altText by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Insert Image") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedTextField(
+                    value = url,
+                    onValueChange = { url = it },
+                    label = { Text("Image URL") },
+                    placeholder = { Text("https://example.com/image.png") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = altText,
+                    onValueChange = { altText = it },
+                    label = { Text("Alt Text (optional)") },
+                    placeholder = { Text("Description of image") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    text = "Tip: Paste a URL to an image hosted online",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onInsert(url, altText) },
+                enabled = url.isNotBlank()
+            ) {
+                Text("Insert")
+            }
+        },
         dismissButton = {
             TextButton(onClick = onDismiss) {
                 Text("Cancel")
