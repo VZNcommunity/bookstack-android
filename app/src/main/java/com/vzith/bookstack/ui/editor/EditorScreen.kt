@@ -1,8 +1,12 @@
 package com.vzith.bookstack.ui.editor
 
+import android.content.Intent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -12,20 +16,26 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.ParagraphStyle
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.mohamedrejeb.richeditor.model.rememberRichTextState
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditor
 import com.mohamedrejeb.richeditor.ui.material3.RichTextEditorDefaults
+import com.vzith.bookstack.data.api.RevisionSummary
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 
 /**
  * BookStack Android App - Editor Screen (2026-01-05)
+ * Updated: 2026-01-11 - Added revision history and export
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -35,6 +45,8 @@ fun EditorScreen(
     viewModel: EditorViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
+    var showMoreMenu by remember { mutableStateOf(false) }
 
     LaunchedEffect(pageId) {
         viewModel.loadPage(pageId)
@@ -94,6 +106,33 @@ fun EditorScreen(
                             Icon(Icons.Default.Save, contentDescription = "Save")
                         }
                     }
+                    // More menu (2026-01-11)
+                    Box {
+                        IconButton(onClick = { showMoreMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "More")
+                        }
+                        DropdownMenu(
+                            expanded = showMoreMenu,
+                            onDismissRequest = { showMoreMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("History") },
+                                leadingIcon = { Icon(Icons.Default.History, null) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    viewModel.showRevisionHistory()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Export") },
+                                leadingIcon = { Icon(Icons.Default.Share, null) },
+                                onClick = {
+                                    showMoreMenu = false
+                                    viewModel.showExportMenu()
+                                }
+                            )
+                        }
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -151,6 +190,69 @@ fun EditorScreen(
             ) {
                 Text(error)
             }
+        }
+    }
+
+    // Revision History Sheet (2026-01-11)
+    if (uiState.showRevisionHistory) {
+        RevisionHistorySheet(
+            revisions = uiState.revisions,
+            isLoading = uiState.isLoadingRevisions,
+            selectedRevisionHtml = uiState.selectedRevisionHtml,
+            onPreview = { viewModel.previewRevision(it) },
+            onRestore = { viewModel.restoreRevision(it) },
+            onDismiss = { viewModel.hideRevisionHistory() }
+        )
+    }
+
+    // Export Dialog (2026-01-11)
+    if (uiState.showExportMenu) {
+        ExportDialog(
+            onExport = { format -> viewModel.exportPage(format) },
+            onDismiss = { viewModel.hideExportMenu() }
+        )
+    }
+
+    // Handle export result - share via intent (2026-01-11)
+    LaunchedEffect(uiState.exportedContent) {
+        uiState.exportedContent?.let { result ->
+            when (result) {
+                is ExportResult.Text -> {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = result.format
+                        putExtra(Intent.EXTRA_TEXT, result.content)
+                        putExtra(Intent.EXTRA_SUBJECT, result.filename)
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Share ${result.filename}"))
+                }
+                is ExportResult.Binary -> {
+                    // Save to cache and share
+                    val file = File(context.cacheDir, result.filename)
+                    file.writeBytes(result.content)
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        file
+                    )
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = result.mimeType
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Share ${result.filename}"))
+                }
+            }
+            viewModel.clearExportedContent()
+        }
+    }
+
+    // Exporting overlay
+    if (uiState.isExporting) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            CircularProgressIndicator()
         }
     }
 }
@@ -290,4 +392,186 @@ private fun EditorToolbar(
             )
         }
     }
+}
+
+// Revision History Sheet (2026-01-11)
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RevisionHistorySheet(
+    revisions: List<RevisionSummary>,
+    isLoading: Boolean,
+    selectedRevisionHtml: String?,
+    onPreview: (Int) -> Unit,
+    onRestore: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val dateFormat = remember { SimpleDateFormat("MMM d, yyyy h:mm a", Locale.getDefault()) }
+
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "Revision History",
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(bottom = 16.dp)
+            )
+
+            if (isLoading && revisions.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (revisions.isEmpty()) {
+                Text(
+                    text = "No revision history available",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 400.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(revisions) { revision ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onPreview(revision.id) }
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Revision ${revision.revision_number}",
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = try {
+                                            dateFormat.format(
+                                                SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+                                                    .parse(revision.created_at) ?: Date()
+                                            )
+                                        } catch (e: Exception) {
+                                            revision.created_at
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    revision.created_by?.let { user ->
+                                        Text(
+                                            text = "by ${user.name}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    revision.summary?.let { summary ->
+                                        if (summary.isNotBlank()) {
+                                            Text(
+                                                text = summary,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                                TextButton(onClick = { onRestore(revision.id) }) {
+                                    Text("Restore")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Preview area
+            selectedRevisionHtml?.let { html ->
+                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+                Text(
+                    text = "Preview",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 200.dp)
+                ) {
+                    Text(
+                        text = html.replace(Regex("<[^>]*>"), "").take(500),
+                        modifier = Modifier
+                            .padding(12.dp)
+                            .verticalScroll(rememberScrollState()),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+// Export Dialog (2026-01-11)
+@Composable
+private fun ExportDialog(
+    onExport: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Export Page") },
+        text = {
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "Choose export format:",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                listOf(
+                    "html" to "HTML",
+                    "markdown" to "Markdown",
+                    "plaintext" to "Plain Text",
+                    "pdf" to "PDF"
+                ).forEach { (format, label) ->
+                    OutlinedButton(
+                        onClick = { onExport(format) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            imageVector = when (format) {
+                                "html" -> Icons.Default.Code
+                                "markdown" -> Icons.Default.Description
+                                "pdf" -> Icons.Default.PictureAsPdf
+                                else -> Icons.Default.TextFields
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(label)
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

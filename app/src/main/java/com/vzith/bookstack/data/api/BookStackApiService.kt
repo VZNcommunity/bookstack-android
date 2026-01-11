@@ -52,6 +52,29 @@ interface BookStackApiService {
 
     @DELETE("api/pages/{id}")
     suspend fun deletePage(@Path("id") id: Int): Response<Unit>
+
+    // Page Revisions (2026-01-11)
+    @GET("api/pages/{id}/revisions")
+    suspend fun getPageRevisions(@Path("id") pageId: Int): Response<RevisionListResponse>
+
+    @GET("api/pages/{pageId}/revisions/{revisionId}")
+    suspend fun getRevision(
+        @Path("pageId") pageId: Int,
+        @Path("revisionId") revisionId: Int
+    ): Response<RevisionDetailResponse>
+
+    // Page Export (2026-01-11)
+    @GET("api/pages/{id}/export/html")
+    suspend fun exportPageHtml(@Path("id") id: Int): Response<String>
+
+    @GET("api/pages/{id}/export/pdf")
+    suspend fun exportPagePdf(@Path("id") id: Int): Response<okhttp3.ResponseBody>
+
+    @GET("api/pages/{id}/export/markdown")
+    suspend fun exportPageMarkdown(@Path("id") id: Int): Response<String>
+
+    @GET("api/pages/{id}/export/plaintext")
+    suspend fun exportPagePlaintext(@Path("id") id: Int): Response<String>
 }
 
 // Data classes for API responses
@@ -181,4 +204,37 @@ data class CreatePageRequest(
     val name: String,
     val html: String? = null,
     val markdown: String? = null
+)
+
+// Page Revisions (2026-01-11)
+data class RevisionListResponse(
+    val data: List<RevisionSummary>,
+    val total: Int
+)
+
+data class RevisionSummary(
+    val id: Int,
+    val page_id: Int,
+    val name: String,
+    val created_by: UserSummary?,
+    val revision_number: Int,
+    val created_at: String,
+    val updated_at: String,
+    val summary: String?
+)
+
+data class RevisionDetailResponse(
+    val id: Int,
+    val page_id: Int,
+    val name: String,
+    val html: String,
+    val created_by: UserSummary?,
+    val revision_number: Int,
+    val created_at: String,
+    val updated_at: String
+)
+
+data class UserSummary(
+    val id: Int,
+    val name: String
 )

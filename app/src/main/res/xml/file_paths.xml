@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- BookStack Android App - FileProvider paths (2026-01-11) -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Cache directory for exported files -->
+    <cache-path name="exports" path="." />
+</paths>

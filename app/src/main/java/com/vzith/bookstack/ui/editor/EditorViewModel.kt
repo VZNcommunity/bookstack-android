@@ -3,6 +3,7 @@ package com.vzith.bookstack.ui.editor
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mohamedrejeb.richeditor.model.RichTextState
+import com.vzith.bookstack.data.api.RevisionSummary
 import com.vzith.bookstack.data.db.entity.PageEntity
 import com.vzith.bookstack.data.repository.PageRepository
 import com.vzith.bookstack.data.sync.SyncManager
@@ -32,8 +33,23 @@ data class EditorUiState(
     val isSaving: Boolean = false,
     val syncState: SyncState = SyncState.Disconnected,
     val error: String? = null,
-    val hasUnsavedChanges: Boolean = false
+    val hasUnsavedChanges: Boolean = false,
+    // Revision history (2026-01-11)
+    val showRevisionHistory: Boolean = false,
+    val revisions: List<RevisionSummary> = emptyList(),
+    val isLoadingRevisions: Boolean = false,
+    val selectedRevisionHtml: String? = null,
+    // Export (2026-01-11)
+    val showExportMenu: Boolean = false,
+    val isExporting: Boolean = false,
+    val exportedContent: ExportResult? = null
 )
+
+// Export result (2026-01-11)
+sealed class ExportResult {
+    data class Text(val content: String, val format: String, val filename: String) : ExportResult()
+    data class Binary(val content: ByteArray, val mimeType: String, val filename: String) : ExportResult()
+}
 
 class EditorViewModel : ViewModel() {
 
@@ -172,6 +188,109 @@ class EditorViewModel : ViewModel() {
 
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    // Revision history functions (2026-01-11)
+
+    fun showRevisionHistory() {
+        _uiState.update { it.copy(showRevisionHistory = true, isLoadingRevisions = true) }
+        viewModelScope.launch {
+            val result = pageRepository.getRevisions(currentPageId)
+            result.onSuccess { revisions ->
+                _uiState.update { it.copy(revisions = revisions, isLoadingRevisions = false) }
+            }.onFailure { e ->
+                _uiState.update { it.copy(error = e.message, isLoadingRevisions = false) }
+            }
+        }
+    }
+
+    fun hideRevisionHistory() {
+        _uiState.update {
+            it.copy(
+                showRevisionHistory = false,
+                selectedRevisionHtml = null
+            )
+        }
+    }
+
+    fun previewRevision(revisionId: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingRevisions = true) }
+            val result = pageRepository.getRevision(currentPageId, revisionId)
+            result.onSuccess { revision ->
+                _uiState.update {
+                    it.copy(selectedRevisionHtml = revision.html, isLoadingRevisions = false)
+                }
+            }.onFailure { e ->
+                _uiState.update { it.copy(error = e.message, isLoadingRevisions = false) }
+            }
+        }
+    }
+
+    fun restoreRevision(revisionId: Int) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingRevisions = true) }
+            val result = pageRepository.getRevision(currentPageId, revisionId)
+            result.onSuccess { revision ->
+                // Apply revision content to editor
+                richTextState.setHtml(revision.html)
+                _uiState.update {
+                    it.copy(
+                        showRevisionHistory = false,
+                        selectedRevisionHtml = null,
+                        isLoadingRevisions = false,
+                        hasUnsavedChanges = true
+                    )
+                }
+            }.onFailure { e ->
+                _uiState.update { it.copy(error = e.message, isLoadingRevisions = false) }
+            }
+        }
+    }
+
+    // Export functions (2026-01-11)
+
+    fun showExportMenu() {
+        _uiState.update { it.copy(showExportMenu = true) }
+    }
+
+    fun hideExportMenu() {
+        _uiState.update { it.copy(showExportMenu = false) }
+    }
+
+    fun exportPage(format: String) {
+        val pageName = _uiState.value.page?.name ?: "page"
+        val safeFileName = pageName.replace(Regex("[^a-zA-Z0-9.-]"), "_")
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isExporting = true, showExportMenu = false) }
+
+            val result = when (format) {
+                "html" -> pageRepository.exportHtml(currentPageId).map { content ->
+                    ExportResult.Text(content, "text/html", "$safeFileName.html")
+                }
+                "markdown" -> pageRepository.exportMarkdown(currentPageId).map { content ->
+                    ExportResult.Text(content, "text/markdown", "$safeFileName.md")
+                }
+                "plaintext" -> pageRepository.exportPlaintext(currentPageId).map { content ->
+                    ExportResult.Text(content, "text/plain", "$safeFileName.txt")
+                }
+                "pdf" -> pageRepository.exportPdf(currentPageId).map { content ->
+                    ExportResult.Binary(content, "application/pdf", "$safeFileName.pdf")
+                }
+                else -> Result.failure(Exception("Unknown format"))
+            }
+
+            result.onSuccess { exportResult ->
+                _uiState.update { it.copy(isExporting = false, exportedContent = exportResult) }
+            }.onFailure { e ->
+                _uiState.update { it.copy(isExporting = false, error = e.message) }
+            }
+        }
+    }
+
+    fun clearExportedContent() {
+        _uiState.update { it.copy(exportedContent = null) }
     }
 
     override fun onCleared() {

@@ -4,6 +4,8 @@ import com.vzith.bookstack.BookStackApplication
 import com.vzith.bookstack.data.api.BookStackApiClient
 import com.vzith.bookstack.data.api.CreatePageRequest
 import com.vzith.bookstack.data.api.PageUpdateRequest
+import com.vzith.bookstack.data.api.RevisionDetailResponse
+import com.vzith.bookstack.data.api.RevisionSummary
 import com.vzith.bookstack.data.db.BookStackDatabase
 import com.vzith.bookstack.data.db.entity.PageEntity
 import kotlinx.coroutines.Dispatchers
@@ -215,6 +217,124 @@ class PageRepository {
                 Result.success(Unit)
             } else {
                 Result.failure(Exception("Delete failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Get page revision history (2026-01-11)
+     */
+    suspend fun getRevisions(pageId: Int): Result<List<RevisionSummary>> =
+        withContext(Dispatchers.IO) {
+            try {
+                val api = BookStackApiClient.getService()
+                    ?: return@withContext Result.failure(Exception("Server not configured"))
+
+                val response = api.getPageRevisions(pageId)
+                if (response.isSuccessful) {
+                    Result.success(response.body()?.data ?: emptyList())
+                } else {
+                    Result.failure(Exception("Failed to load revisions: ${response.code()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    /**
+     * Get specific revision content (2026-01-11)
+     */
+    suspend fun getRevision(pageId: Int, revisionId: Int): Result<RevisionDetailResponse> =
+        withContext(Dispatchers.IO) {
+            try {
+                val api = BookStackApiClient.getService()
+                    ?: return@withContext Result.failure(Exception("Server not configured"))
+
+                val response = api.getRevision(pageId, revisionId)
+                if (response.isSuccessful) {
+                    response.body()?.let {
+                        Result.success(it)
+                    } ?: Result.failure(Exception("Empty response"))
+                } else {
+                    Result.failure(Exception("Failed to load revision: ${response.code()}"))
+                }
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
+
+    /**
+     * Export page as HTML (2026-01-11)
+     */
+    suspend fun exportHtml(pageId: Int): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val api = BookStackApiClient.getService()
+                ?: return@withContext Result.failure(Exception("Server not configured"))
+
+            val response = api.exportPageHtml(pageId)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: "")
+            } else {
+                Result.failure(Exception("Export failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Export page as Markdown (2026-01-11)
+     */
+    suspend fun exportMarkdown(pageId: Int): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val api = BookStackApiClient.getService()
+                ?: return@withContext Result.failure(Exception("Server not configured"))
+
+            val response = api.exportPageMarkdown(pageId)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: "")
+            } else {
+                Result.failure(Exception("Export failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Export page as plaintext (2026-01-11)
+     */
+    suspend fun exportPlaintext(pageId: Int): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            val api = BookStackApiClient.getService()
+                ?: return@withContext Result.failure(Exception("Server not configured"))
+
+            val response = api.exportPagePlaintext(pageId)
+            if (response.isSuccessful) {
+                Result.success(response.body() ?: "")
+            } else {
+                Result.failure(Exception("Export failed: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Export page as PDF (2026-01-11)
+     */
+    suspend fun exportPdf(pageId: Int): Result<ByteArray> = withContext(Dispatchers.IO) {
+        try {
+            val api = BookStackApiClient.getService()
+                ?: return@withContext Result.failure(Exception("Server not configured"))
+
+            val response = api.exportPagePdf(pageId)
+            if (response.isSuccessful) {
+                Result.success(response.body()?.bytes() ?: ByteArray(0))
+            } else {
+                Result.failure(Exception("Export failed: ${response.code()}"))
             }
         } catch (e: Exception) {
             Result.failure(e)
